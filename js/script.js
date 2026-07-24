@@ -23,6 +23,8 @@ const customTextContainer = document.getElementById("custom-text-container"),
     customTextInput = document.getElementById("custom-text"),
     loadCustomTextBtn = document.getElementById("load-custom-text");
 
+const keyboard = document.querySelector(".virtual-keyboard");
+
 const CHARS_PER_WORD = 5;
 const SECONDS_PER_MINUTE = 60;
 const TIMER_INTERVAL = 1000;
@@ -34,6 +36,14 @@ const typingModes = {
   words,
   sentences,
 };
+
+const keyboardRows = [
+  ["`","1","2","3","4","5","6","7","8","9","0","-","="],
+  ["q","w","e","r","t","y","u","i","o","p","[","]","\\"],
+  ["a","s","d","f","g","h","j","k","l",";","'"],
+  ["z","x","c","v","b","n","m",",",".","/"],
+  [" "]
+];
 
 let timer,
   maxTime = Number(timeSelect.value),
@@ -161,6 +171,73 @@ else {
   if (firstSpan) {
     firstSpan.classList.add('active');
   }
+  if (firstSpan) {
+    highlightExpectedKey(firstSpan.innerText);
+  }
+}
+
+function renderKeyboard() {
+    keyboard.innerHTML = "";
+
+    keyboardRows.forEach(row => {
+        const rowDiv = document.createElement("div");
+        rowDiv.className = "keyboard-row";
+
+        row.forEach(key => {
+            const button = document.createElement("div");
+
+            button.className = "key";
+            button.dataset.key = key === " " ? "space" : key.toLowerCase();
+
+            button.textContent =
+                key === " "
+                    ? "Space"
+                    : key === "\\"
+                    ? "\\"
+                    : key;
+
+            rowDiv.appendChild(button);
+        });
+        keyboard.appendChild(rowDiv);
+    });
+}
+
+function clearKeyboardHighlights() {
+    keyboard
+        .querySelectorAll(".key")
+        .forEach(key =>
+            key.classList.remove("active", "correct", "incorrect")
+        );
+}
+
+function highlightExpectedKey(character) {
+    clearKeyboardHighlights();
+
+    const value =
+        character === " "
+            ? "space"
+            : character.toLowerCase();
+
+    const key = keyboard.querySelector(`[data-key="${CSS.escape(value)}"]`);
+
+    if (key) {
+        key.classList.add("active");
+    }
+}
+
+function flashPressedKey(character, correct) {
+    const value =
+        character === " "
+            ? "space"
+            : character.toLowerCase();
+
+    const key = keyboard.querySelector(`[data-key="${CSS.escape(value)}"]`);
+  
+    if (!key) return;
+    key.classList.add(correct ? "correct" : "incorrect");
+    setTimeout(() => {
+        key.classList.remove("correct", "incorrect");
+    }, 200);
 }
 
 function initTyping() {
@@ -199,17 +276,23 @@ function initTyping() {
       }
 
       if (characters[charIndex].innerText === typedChar) {
-        characters[charIndex].classList.add('correct');
+        characters[charIndex].classList.add("correct");
+        
+        flashPressedKey(typedChar, true);
+        
         charIndex++;
         totalCorrectChars++;
       } else {
         mistakes++;
-        characters[charIndex].classList.add('incorrect');
-        if (modeSelect.value !== 'words') {
+        characters[charIndex].classList.add("incorrect");
+        
+        flashPressedKey(typedChar, false);
+        
+        if (modeSelect.value !== "words") {
           charIndex++;
+        
         }
       }
-    }
 
     if (charIndex >= characters.length) {
       if (modeSelect.value === 'words') {
@@ -233,6 +316,9 @@ function initTyping() {
     if (characters[charIndex]) {
       characters[charIndex].classList.add('active');
     }
+   if (characters[charIndex]) {
+     highlightExpectedKey(characters[charIndex].innerText);
+   }
 
     wpmTag.innerText = calculateWPM(totalCorrectChars, maxTime, timeLeft);
     mistakeTag.innerText = mistakes;
@@ -257,6 +343,7 @@ function initTimer() {
 
 function endTypingTest() {
   clearInterval(timer);
+  clearKeyboardHighlights();
   saveLastSession();
   inpField.value = '';
   isTyping = false;
@@ -282,6 +369,9 @@ function resetGame() {
   progressTag.innerText = '0%';
   accuracyTag.innerText = '100%';
   keysPressedTag.innerText = 0;
+  const firstSpan = typingText.querySelector("span");
+if (firstSpan) {
+    highlightExpectedKey(firstSpan.innerText);
 }
 
 function themeToggler() {
@@ -308,6 +398,7 @@ function handleKeyboardShortcuts(event) {
   }
 }
 
+renderKeyboard();
 keySelector.hidden = modeSelect.value !== 'specificKey';
 loadTypingContent();
 loadLastSession();

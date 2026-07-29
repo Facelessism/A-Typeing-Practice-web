@@ -20,17 +20,27 @@ const lastWpmTag = document.getElementById('last-wpm'),
   lastKeysPressedTag = document.getElementById('last-keys-pressed');
 
 const customTextContainer = document.getElementById("custom-text-container"),
-    customTextInput = document.getElementById("custom-text"),
-    loadCustomTextBtn = document.getElementById("load-custom-text");
+  customTextInput = document.getElementById("custom-text"),
+  loadCustomTextBtn = document.getElementById("load-custom-text");
+
+const exportJsonBtn = document.getElementById("export-json"),
+  exportCsvBtn = document.getElementById("export-csv");
 
 const keyboard = document.querySelector(".virtual-keyboard");
 
 const CHARS_PER_WORD = 5;
 const SECONDS_PER_MINUTE = 60;
 const TIMER_INTERVAL = 1000;
+const MAX_HISTORY = 100;
 
-const STORAGE_KEY = 'typing-last-session';
+const LAST_SESSION_KEY = 'typing-last-session';
+const HISTORY_KEY = 'typing-history';
+
+const MIME_JSON = 'application/json';
+const MIME_CSV = 'text/csv';
+
 let sessionSaved = false;
+
 const typingModes = {
   paragraphs,
   words,
@@ -86,6 +96,14 @@ function calculateKeyspressed() {
   return keysPressedCount;
 }
 
+function getHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+
 function saveLastSession() {
   if (sessionSaved) return;
 
@@ -95,12 +113,27 @@ function saveLastSession() {
     accuracy: calculateAccuracy(totalCorrectChars, mistakes),
     mistakes: mistakes,
     keysPressed: keysPressedCount,
+    mode: modeSelect.value,
+    duration: maxTime,
   };
-  console.log(keysPressedCount);
 
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+    localStorage.setItem(LAST_SESSION_KEY, JSON.stringify(session));
+
+    const history = getHistory();
+    history.push({
+      ...session,
+      date: new Date().toISOString(),
+    });
+
+    if (history.length > MAX_HISTORY) {
+      history.shift();
+    }
+
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+
     loadLastSession();
+    updateExportButtons();
     sessionSaved = true;
   } catch (error) {
     console.error('Failed to save your typing session:', error);
@@ -108,7 +141,7 @@ function saveLastSession() {
 }
 
 function loadLastSession() {
-  const stored = localStorage.getItem(STORAGE_KEY);
+  const stored = localStorage.getItem(LAST_SESSION_KEY);
   if (!stored) {
     return;
   }
@@ -121,8 +154,63 @@ function loadLastSession() {
     lastMistakeTag.innerText = session.mistakes;
     lastKeysPressedTag.innerText = session.keysPressed ?? 0;
   } catch (error) {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(LAST_SESSION_KEY);
   }
+}
+
+function downloadFile(filename, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
+  URL.revokeObjectURL(url);
+}
+
+function exportJSON() {
+  const history = getHistory();
+  if (history.length === 0) {
+    alert('No typing history to export yet.');
+    return;
+  }
+
+  const content = JSON.stringify(history, null, 2);
+  const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  downloadFile(`typing-history-${timestamp}.json`, content, MIME_JSON);
+}
+
+function exportCSV() {
+  const history = getHistory();
+  if (history.length === 0) {
+    alert('No typing history to export yet.');
+    return;
+  }
+
+  const headers = ['date', 'mode', 'duration', 'wpm', 'cpm', 'accuracy', 'mistakes', 'keysPressed'];
+  const rows = history.map(entry =>
+    headers.map(h => {
+      const value = entry[h] ?? '';
+      const str = String(value).replace(/"/g, '""');
+      return `"${str}"`;
+    }).join(',')
+  );
+
+  const csv = [headers.join(','), ...rows].join('\n');
+  const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  downloadFile(`typing-history-${timestamp}.csv`, csv, MIME_CSV);
+}
+
+function updateExportButtons() {
+  if (!exportJsonBtn || !exportCsvBtn) return;
+
+  const hasHistory = getHistory().length > 0;
+  exportJsonBtn.disabled = !hasHistory;
+  exportCsvBtn.disabled = !hasHistory;
 }
 
 function generateKeyPractice() {
@@ -130,11 +218,11 @@ function generateKeyPractice() {
 }
 
 function loadCustomText() {
-    if (!customTextInput.value.trim()) {
-        alert("Please enter some text first.");
-        return;
-    }
-    resetGame();
+  if (!customTextInput.value.trim()) {
+    alert("Please enter some text first.");
+    return;
+  }
+  resetGame();
 }
 
 function loadTypingContent() {
@@ -144,14 +232,12 @@ if (modeSelect.value === "custom") {
     text = customTextInput.value.trim();
 
     if (!text) {
-        typingText.replaceChildren();
-        return;
+      typingText.replaceChildren();
+      return;
     }
-}
-else if (modeSelect.value === "specificKey") {
+  } else if (modeSelect.value === "specificKey") {
     text = generateKeyPractice();
-}
-else {
+  } else {
     const dataset = typingModes[modeSelect.value];
     const randomIndex = Math.floor(Math.random() * dataset.length);
     text = dataset[randomIndex];
@@ -170,74 +256,72 @@ else {
   const firstSpan = typingText.querySelector('span');
   if (firstSpan) {
     firstSpan.classList.add('active');
-  }
-  if (firstSpan) {
     highlightExpectedKey(firstSpan.innerText);
   }
 }
 
 function renderKeyboard() {
-    keyboard.innerHTML = "";
+  keyboard.innerHTML = "";
 
-    keyboardRows.forEach(row => {
-        const rowDiv = document.createElement("div");
-        rowDiv.className = "keyboard-row";
+  keyboardRows.forEach(row => {
+    const rowDiv = document.createElement("div");
+    rowDiv.className = "keyboard-row";
 
-        row.forEach(key => {
-            const button = document.createElement("div");
+    row.forEach(key => {
+      const button = document.createElement("div");
 
-            button.className = "key";
-            button.dataset.key = key === " " ? "space" : key.toLowerCase();
+      button.className = "key";
+      button.dataset.key = key === " " ? "space" : key.toLowerCase();
 
-            button.textContent =
-                key === " "
-                    ? "Space"
-                    : key === "\\"
-                    ? "\\"
-                    : key;
+      button.textContent =
+        key === " "
+          ? "Space"
+          : key === "\\"
+          ? "\\"
+          : key;
 
-            rowDiv.appendChild(button);
-        });
-        keyboard.appendChild(rowDiv);
+      rowDiv.appendChild(button);
     });
+    keyboard.appendChild(rowDiv);
+  });
 }
 
 function clearKeyboardHighlights() {
-    keyboard
-        .querySelectorAll(".key")
-        .forEach(key =>
-            key.classList.remove("active", "correct", "incorrect")
-        );
+  keyboard
+    .querySelectorAll(".key")
+    .forEach(key =>
+      key.classList.remove("active", "correct", "incorrect")
+    );
 }
 
 function highlightExpectedKey(character) {
-    clearKeyboardHighlights();
+  clearKeyboardHighlights();
 
-    const value =
-        character === " "
-            ? "space"
-            : character.toLowerCase();
+  const value =
+    character === " "
+      ? "space"
+      : character.toLowerCase();
 
-    const key = keyboard.querySelector(`[data-key="${CSS.escape(value)}"]`);
+  const key = keyboard.querySelector(`[data-key="${CSS.escape(value)}"]`);
 
-    if (key) {
-        key.classList.add("active");
-    }
+  if (key) {
+    key.classList.add("active");
+  }
 }
 
 function flashPressedKey(character, correct) {
-    const value =
-        character === " "
-            ? "space"
-            : character.toLowerCase();
+  const value =
+    character === " "
+      ? "space"
+      : character.toLowerCase();
 
-    const key = keyboard.querySelector(`[data-key="${CSS.escape(value)}"]`);
-  
-    if (!key) return;
-    key.classList.add(correct ? "correct" : "incorrect");
-    setTimeout(() => {
-        key.classList.remove("correct", "incorrect");
-    }, 200);
+  const key = keyboard.querySelector(`[data-key="${CSS.escape(value)}"]`);
+
+  if (!key) return;
+  key.classList.add(correct ? "correct" : "incorrect");
+  setTimeout(() => {
+    key.classList.remove("correct", "incorrect");
+  }, 200);
 }
 
 function initTyping() {
@@ -277,22 +361,19 @@ function initTyping() {
 
       if (characters[charIndex].innerText === typedChar) {
         characters[charIndex].classList.add("correct");
-        
         flashPressedKey(typedChar, true);
-        
         charIndex++;
         totalCorrectChars++;
       } else {
         mistakes++;
         characters[charIndex].classList.add("incorrect");
-        
         flashPressedKey(typedChar, false);
-        
+
         if (modeSelect.value !== "words") {
           charIndex++;
-        
         }
       }
+    }
 
     if (charIndex >= characters.length) {
       if (modeSelect.value === 'words') {
@@ -315,10 +396,8 @@ function initTyping() {
     characters.forEach((span) => span.classList.remove('active'));
     if (characters[charIndex]) {
       characters[charIndex].classList.add('active');
+      highlightExpectedKey(characters[charIndex].innerText);
     }
-   if (characters[charIndex]) {
-     highlightExpectedKey(characters[charIndex].innerText);
-   }
 
     wpmTag.innerText = calculateWPM(totalCorrectChars, maxTime, timeLeft);
     mistakeTag.innerText = mistakes;
@@ -369,9 +448,11 @@ function resetGame() {
   progressTag.innerText = '0%';
   accuracyTag.innerText = '100%';
   keysPressedTag.innerText = 0;
+
   const firstSpan = typingText.querySelector("span");
-if (firstSpan) {
+  if (firstSpan) {
     highlightExpectedKey(firstSpan.innerText);
+  }
 }
 
 function themeToggler() {
@@ -402,27 +483,35 @@ renderKeyboard();
 keySelector.hidden = modeSelect.value !== 'specificKey';
 loadTypingContent();
 loadLastSession();
+updateExportButtons();
 
 document.addEventListener('keydown', () => inpField.focus());
 document.addEventListener('keydown', handleKeyboardShortcuts);
 typingText.addEventListener('click', () => inpField.focus());
 
 modeSelect.addEventListener("change", () => {
-    keySelector.hidden = modeSelect.value !== "specificKey";
-    customTextContainer.hidden = modeSelect.value !== "custom";
+  keySelector.hidden = modeSelect.value !== "specificKey";
+  customTextContainer.hidden = modeSelect.value !== "custom";
 
-    if (modeSelect.value === "custom") {
-        typingText.replaceChildren();
-        inpField.value = "";
-        return;
-    }
-    resetGame();
+  if (modeSelect.value === "custom") {
+    typingText.replaceChildren();
+    inpField.value = "";
+    return;
+  }
+  resetGame();
 });
 
 keySelect.addEventListener('change', resetGame);
 inpField.addEventListener('input', initTyping);
 tryAgainBtn.addEventListener('click', resetGame);
 loadCustomTextBtn.addEventListener("click", loadCustomText);
+
+if (exportJsonBtn) {
+  exportJsonBtn.addEventListener("click", exportJSON);
+}
+if (exportCsvBtn) {
+  exportCsvBtn.addEventListener("click", exportCSV);
+}
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {

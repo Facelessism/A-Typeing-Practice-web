@@ -430,5 +430,66 @@ if (typeof module !== 'undefined' && module.exports) {
     calculateProgress,
     calculateAccuracy,
     calculateKeyspressed,
+
+    initTyping,
+    initTimer,
+    resetGame,
+    endTypingTest,
+    loadTypingContent,
+    loadCustomText,
+
+    highlightExpectedKey,
+    flashPressedKey,
+    clearKeyboardHighlights,
+
+    exportJSON,
+    exportCSV,
+    getHistory,
+    updateExportButtons,
+
+    getState() {
+      return {
+        timer,
+        maxTime,
+        timeLeft,
+        charIndex,
+        mistakes,
+        keysPressedCount,
+        totalCorrectChars,
+        isTyping,
+        sessionSaved,
+      };
+    },
+
+    setState(state = {}) {
+      if ('timer' in state) timer = state.timer;
+      if ('maxTime' in state) maxTime = state.maxTime;
+      if ('timeLeft' in state) timeLeft = state.timeLeft;
+      if ('charIndex' in state) charIndex = state.charIndex;
+      if ('mistakes' in state) mistakes = state.mistakes;
+      if ('keysPressedCount' in state) keysPressedCount = state.keysPressedCount;
+      if ('totalCorrectChars' in state) totalCorrectChars = state.totalCorrectChars;
+      if ('isTyping' in state) isTyping = state.isTyping;
+      if ('sessionSaved' in state) sessionSaved = state.sessionSaved;
+    },
+
+    elements: {
+      typingText,
+      modeSelect,
+      keySelect,
+      keySelector,
+      timeSelect,
+      inpField,
+      keyboard,
+    },
+
+    constants: {
+      CHARS_PER_WORD,
+      SECONDS_PER_MINUTE,
+      TIMER_INTERVAL,
+      MAX_HISTORY,
+      LAST_SESSION_KEY,
+      HISTORY_KEY,
+    },
   };
 }
